@@ -54,10 +54,39 @@ app.post("/monday/newPulse", async (req, res) => {
         console.log("pulse id", req.body.event.pulseId);
         console.log("board id", req.body.event.boardId);
 
-        await assignPulseId(pulseId, boardId);
+        const columnId = await detectIdColumnType(boardId);
+
+        await assignPulseId(pulseId, boardId, columnId);
     }
 
     res.json({ challenge: req.body.challenge }).status(200).send();
+});
+
+// An API call to assign Auto ID to all pulses in a specified board
+app.post("/monday/assignAllBoardIds", async (req, res) => {
+    if (!req.body) {
+        return res.sendStatus(400);
+    }
+
+    const boardId = req.body.boardId;
+
+    const columnId = await detectIdColumnType(boardId);
+
+    const boardQuery = '{boards(limit:1, ids:[' + boardId + '])' 
+        + ' { id items { id } } }';
+        
+    var boardResult = await fetchMondayQuery(boardQuery);  
+    console.log(JSON.stringify(boardResult, null, 2));
+    const items = boardResult.data.boards[0].items;
+
+    const length = items.length;
+
+    for (var i = 0; i < length;i ++) {
+        const pulseId = items[i].id;
+        await assignPulseId(pulseId, boardId);
+    }
+    
+    res.status(200).send();
 });
 
 // An API call to assign Auto ID to an existing pulse
@@ -69,18 +98,17 @@ app.post("/monday/assignId", async (req, res) => {
     const pulseId = req.body.pulseId;
     const boardId = req.body.boardId;
 
-    await assignPulseId(pulseId, boardId);
+    const columnId = await detectIdColumnType(boardId);
+    await assignPulseId(pulseId, boardId, columnId);
 
     res.status(200).send();
 });
 
-async function assignPulseId(pulseId, boardId) {
+async function detectIdColumnType(boardId) {
     const boardQuery = '{boards(limit:1, ids:[' + boardId + '])' 
         + ' { id items (limit:1) { column_values{title id} } } }';
         
     var boardResult = await fetchMondayQuery(boardQuery);  
-
-    console.log(JSON.stringify(boardResult, null, 2));
 
     const columns = boardResult.data.boards[0].items[0].column_values;
     const column = columns.find(column => column.title == 'ID');
@@ -88,8 +116,11 @@ async function assignPulseId(pulseId, boardId) {
     if (column == null) {
         throw new Error('Specified board doesn\'t contain ID column').send();
     }    
-    const columnId = column.id;
 
+    return column.id;
+}
+
+async function assignPulseId(pulseId, boardId, columnId) {
     const id = await generateId();
     const fullId = 'AOC-' + id;
 
@@ -118,7 +149,8 @@ app.get("/test", (req, res) => {
 });
 
 async function generateId() {
-    return id++;
+    id++;
+    return id;
 }
 
 async function fetchMondayQuery(query) {

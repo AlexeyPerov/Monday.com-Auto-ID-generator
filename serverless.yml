@@ -22,6 +22,9 @@ functions:
           path: /monday/assignId
           method: post 
       - http: 
+          path: /monday/assignAllBoardIds
+          method: post 
+      - http: 
           path: /set_id_counter
           method: post 
       - http: 
