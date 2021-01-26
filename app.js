@@ -60,7 +60,7 @@ app.post("/monday/createPulse", (req, res) => {
 });
 
 // An API call to assign Auto ID to an existing pulse
-app.post("/monday/assignId", (req, res) => {
+app.post("/monday/assignId", async (req, res) => {
     if (!req.body) {
         return res.sendStatus(400);
     }
@@ -69,13 +69,11 @@ app.post("/monday/assignId", (req, res) => {
     const boardId = req.body.boardId;
 
     const query = 'mutation { change_simple_column_value (item_id:' + pulseId + ', board_id:' + boardId + ',' 
-        + ' column_id:"gdd___notes", value:' +  '\"AOC-001\"' + ') { updated_at } }';
+        + ' column_id:"text6", value:' +  '\"AOC-001\"' + ') { updated_at } }';
 
-    try {
-        fetchMondayQuery(query);
-    } catch (e) {
-        console.log('error', e);
-    }    
+    var result = await fetchMondayQuery(query);  
+
+    console.log('result', result);
 
     res.status(200).send();
 });
@@ -84,8 +82,8 @@ app.get("/test", (req, res) => {
     res.status(200).send();
 });
 
-function fetchMondayQuery(query) {
-    return fetch("https://api.monday.com/v2", {
+async function fetchMondayQuery(query) {
+    let response = await fetch("https://api.monday.com/v2", {
         method: 'post',
         headers: {
             'Content-Type': 'application/json',
@@ -94,15 +92,13 @@ function fetchMondayQuery(query) {
         body: JSON.stringify({
             'query': query
         })
-    })
-    .then(response => {
-        response.json()
-            .then((data) => {
-                    console.log(data)
-                })
-                .catch(error => console.log(error));
-    })
-    .catch(error => console.log(error));
+    });
+
+    if (!response.ok) {
+        throw new Error('HTTP error, status: ' + response.status);
+    } else {
+        return await response.json();
+    }
 }
 
 module.exports.handler = sls(app);
