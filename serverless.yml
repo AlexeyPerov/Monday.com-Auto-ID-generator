@@ -22,6 +22,12 @@ functions:
           path: /monday/assignId
           method: post 
       - http: 
+          path: /set_id_counter
+          method: post 
+      - http: 
+          path: /get_id_counter
+          method: get 
+      - http: 
           path: /test
           method: get 
 

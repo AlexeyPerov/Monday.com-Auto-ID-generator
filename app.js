@@ -1,4 +1,3 @@
-// https://livecodestream.dev/post/go-serverless-with-nodejs-and-aws-lambda/
 const fetch = require("node-fetch");
 
 require('dotenv').config();
@@ -21,25 +20,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(upload.array());
 app.use(express.static('public'));
 
-// Monday.com webhook upon creation of the new pulse
-app.post("/monday/newPulse", (req, res) => {
-    if (!req.body) {
-        return res.sendStatus(400);
-    }
-
-    console.log("body", req.body);
-
-    if (req.body.event != null && req.body.event.type == "create_pulse") {
-        console.log("pulse id", req.body.event.pulseId);
-
-
-    }
-
-    res.json({ challenge: req.body.challenge }).status(200).send();
-});
-
 // An API call to create a new pulse
-app.post("/monday/createPulse", (req, res) => {
+app.post("/monday/createPulse", async (req, res) => {
     if (!req.body) {
         return res.sendStatus(400);
     }
@@ -50,13 +32,32 @@ app.post("/monday/createPulse", (req, res) => {
     const query = 'mutation{ create_item (board_id:' + boardId + 
         ', item_name:\"' + contents + '\") { id } }';
   
-    try {
-        fetchMondayQuery(query);
-    } catch (e) {
-        console.log('error', e);
-    }    
+    let result = await fetchMondayQuery(query);
+
+    console.log('result', result);
 
     res.status(200).send();
+});
+
+// Monday.com webhook upon creation of the new pulse
+app.post("/monday/newPulse", async (req, res) => {
+    if (!req.body) {
+        return res.sendStatus(400);
+    }
+
+    console.log("body", req.body);
+
+    if (req.body.event != null && req.body.event.type == "create_pulse") {
+        const pulseId = req.body.event.pulseId;
+        const boardId = req.body.event.boardId;
+
+        console.log("pulse id", req.body.event.pulseId);
+        console.log("board id", req.body.event.boardId);
+
+        await assignPulseId(pulseId, boardId);
+    }
+
+    res.json({ challenge: req.body.challenge }).status(200).send();
 });
 
 // An API call to assign Auto ID to an existing pulse
@@ -68,19 +69,57 @@ app.post("/monday/assignId", async (req, res) => {
     const pulseId = req.body.pulseId;
     const boardId = req.body.boardId;
 
+    await assignPulseId(pulseId, boardId);
+
+    res.status(200).send();
+});
+
+async function assignPulseId(pulseId, boardId) {
+    const boardQuery = '{boards(limit:1, ids:[' + boardId + '])' 
+        + ' { id items (limit:1) { column_values{title id} } } }';
+        
+    var boardResult = await fetchMondayQuery(boardQuery);  
+
+    console.log(JSON.stringify(boardResult, null, 2));
+
+    const columns = boardResult.data.boards[0].items[0].column_values;
+    const column = columns.find(column => column.title == 'ID');
+
+    if (column == null) {
+        throw new Error('Specified board doesn\'t contain ID column').send();
+    }    
+    const columnId = column.id;
+
+    const id = await generateId();
+    const fullId = 'AOC-' + id;
+
     const query = 'mutation { change_simple_column_value (item_id:' + pulseId + ', board_id:' + boardId + ',' 
-        + ' column_id:"text6", value:' +  '\"AOC-001\"' + ') { updated_at } }';
+        + ' column_id:"' + columnId + '", value:' +  '\"' + fullId + '\"' + ') { updated_at } }';
 
     var result = await fetchMondayQuery(query);  
 
     console.log('result', result);
+}
 
+var id = 0;
+
+app.post("/set_id_counter", (req, res) => {
+    console.log('new_value', req.new_counter);
+    id = new_counter;
     res.status(200).send();
+});
+
+app.get("/get_id_counter", (req, res) => {    
+    res.status(200).send(id);
 });
 
 app.get("/test", (req, res) => {
     res.status(200).send();
 });
+
+async function generateId() {
+    return id++;
+}
 
 async function fetchMondayQuery(query) {
     let response = await fetch("https://api.monday.com/v2", {
