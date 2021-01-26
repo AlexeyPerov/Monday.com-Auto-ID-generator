@@ -16,8 +16,11 @@ functions:
           path: /monday/newPulse 
           method: post
       - http: 
-          path: /monday/boards
-          method: get 
+          path: /monday/createPulse
+          method: post 
+      - http: 
+          path: /monday/assignId
+          method: post 
       - http: 
           path: /test
           method: get 
