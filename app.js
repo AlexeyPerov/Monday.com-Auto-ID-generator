@@ -1,3 +1,6 @@
+var admin = require("firebase-admin");
+var serviceAccount = require("./serviceAccountKey.json");
+
 const fetch = require("node-fetch");
 
 require('dotenv').config();
@@ -20,18 +23,22 @@ app.use(express.urlencoded({ extended: true }));
 app.use(upload.array());
 app.use(express.static('public'));
 
+const defaultPrefix = process.env.DEFAULT_PREFIX;
+
 // An API call to create a new pulse
 app.post("/monday/createPulse", async (req, res) => {
     if (!req.body) {
         return res.sendStatus(400);
     }
 
+    connectFirebase();
+
     const boardId = req.body.boardId;
     const contents = req.body.contents;
 
-    const query = 'mutation{ create_item (board_id:' + boardId + 
+    const query = 'mutation{ create_item (board_id:' + boardId +
         ', item_name:\"' + contents + '\") { id } }';
-  
+
     let result = await fetchMondayQuery(query);
 
     console.log('result', result);
@@ -68,24 +75,26 @@ app.post("/monday/assignAllBoardIds", async (req, res) => {
         return res.sendStatus(400);
     }
 
+    connectFirebase();
+
     const boardId = req.body.boardId;
 
     const columnId = await detectIdColumnType(boardId);
 
-    const boardQuery = '{boards(limit:1, ids:[' + boardId + '])' 
+    const boardQuery = '{boards(limit:1, ids:[' + boardId + '])'
         + ' { id items { id } } }';
-        
-    var boardResult = await fetchMondayQuery(boardQuery);  
+
+    var boardResult = await fetchMondayQuery(boardQuery);
     console.log(JSON.stringify(boardResult, null, 2));
     const items = boardResult.data.boards[0].items;
 
     const length = items.length;
 
-    for (var i = 0; i < length;i ++) {
+    for (var i = 0; i < length; i++) {
         const pulseId = items[i].id;
-        await assignPulseId(pulseId, boardId);
+        await assignPulseId(pulseId, boardId, columnId);
     }
-    
+
     res.status(200).send();
 });
 
@@ -94,6 +103,8 @@ app.post("/monday/assignId", async (req, res) => {
     if (!req.body) {
         return res.sendStatus(400);
     }
+
+    connectFirebase();
 
     const pulseId = req.body.pulseId;
     const boardId = req.body.boardId;
@@ -105,53 +116,64 @@ app.post("/monday/assignId", async (req, res) => {
 });
 
 async function detectIdColumnType(boardId) {
-    const boardQuery = '{boards(limit:1, ids:[' + boardId + '])' 
+    const boardQuery = '{boards(limit:1, ids:[' + boardId + '])'
         + ' { id items (limit:1) { column_values{title id} } } }';
-        
-    var boardResult = await fetchMondayQuery(boardQuery);  
+
+    var boardResult = await fetchMondayQuery(boardQuery);
 
     const columns = boardResult.data.boards[0].items[0].column_values;
     const column = columns.find(column => column.title == 'ID');
 
     if (column == null) {
         throw new Error('Specified board doesn\'t contain ID column').send();
-    }    
+    }
 
     return column.id;
 }
 
 async function assignPulseId(pulseId, boardId, columnId) {
-    const id = await generateId();
-    const fullId = 'AOC-' + id;
+    var db = admin.database();
+    var ref = db.ref(defaultPrefix.toLowerCase() + "_id");
 
-    const query = 'mutation { change_simple_column_value (item_id:' + pulseId + ', board_id:' + boardId + ',' 
-        + ' column_id:"' + columnId + '", value:' +  '\"' + fullId + '\"' + ') { updated_at } }';
+    var idSnapshot = await ref.get("value");
+    var id = idSnapshot.val() + 1;
 
-    var result = await fetchMondayQuery(query);  
+    await ref.set(id);
 
-    console.log('result', result);
+    const fullId = defaultPrefix + '-' + id;
+
+    const query = 'mutation { change_simple_column_value (item_id:' + pulseId + ', board_id:' + boardId + ','
+        + ' column_id:"' + columnId + '", value:' + '\"' + fullId + '\"' + ') { updated_at } }';
+
+    await fetchMondayQuery(query);
 }
 
-var id = 0;
+app.post("/set_id_counter", async (req, res) => {
+    connectFirebase();
 
-app.post("/set_id_counter", (req, res) => {
-    console.log('new_value', req.new_counter);
-    id = new_counter;
+    var newValue = parseInt(req.body.new_counter);
+    console.log('new_value', newValue);    
+    
+    var db = admin.database();
+    var ref = db.ref(defaultPrefix.toLowerCase() + "_id");
+
+    const result = await ref.set(newValue);
+
+    res.status(200).send(result);
+});
+
+app.get("/get_id_counter", async (req, res) => {
+    connectFirebase();
+
+    var db = admin.database();
+    var ref = db.ref(defaultPrefix.toLowerCase() + "_id");
+    var result = await ref.once("value");
+    res.status(200).send(result);
+});
+
+app.get("/test", (req, res) => {   
     res.status(200).send();
 });
-
-app.get("/get_id_counter", (req, res) => {    
-    res.status(200).send(id);
-});
-
-app.get("/test", (req, res) => {
-    res.status(200).send();
-});
-
-async function generateId() {
-    id++;
-    return id;
-}
 
 async function fetchMondayQuery(query) {
     let response = await fetch("https://api.monday.com/v2", {
@@ -170,6 +192,14 @@ async function fetchMondayQuery(query) {
     } else {
         return await response.json();
     }
+}
+
+function connectFirebase() {
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        databaseURL: process.env.DB_URL
+    });
+
 }
 
 module.exports.handler = sls(app);
