@@ -33,3 +33,6 @@ Deploy using:
 Debug locally using:
 * sls offline start
 
+## Monday.com
+
+Install WebHook using https://support.monday.com/hc/en-us/articles/360003540679-Webhook-Integration-
