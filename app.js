@@ -55,6 +55,8 @@ app.post("/monday/newPulse", async (req, res) => {
     console.log("body", req.body);
 
     if (req.body.event != null && req.body.event.type == "create_pulse") {
+        connectFirebase();
+
         const pulseId = req.body.event.pulseId;
         const boardId = req.body.event.boardId;
 
