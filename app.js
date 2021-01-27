@@ -82,17 +82,25 @@ app.post("/monday/assignAllBoardIds", async (req, res) => {
     const columnId = await detectIdColumnType(boardId);
 
     const boardQuery = '{boards(limit:1, ids:[' + boardId + '])'
-        + ' { id items { id } } }';
+        + ' { id items { id column_values { id text } } } }';
 
     var boardResult = await fetchMondayQuery(boardQuery);
-    console.log(JSON.stringify(boardResult, null, 2));
     const items = boardResult.data.boards[0].items;
 
     const length = items.length;
 
     for (var i = 0; i < length; i++) {
-        const pulseId = items[i].id;
-        await assignPulseId(pulseId, boardId, columnId);
+        const item = items[i];
+        const pulseId = item.id;
+
+        const columns = item.column_values;
+        const column = columns.find(column => column.id == columnId);
+
+        if (column.text != null && column.text != '') {
+            console.log('pulse ' + pulseId + ' already contains ID');            
+        } else {
+            await assignPulseId(pulseId, boardId, columnId);
+        }
     }
 
     res.status(200).send();
@@ -131,7 +139,7 @@ async function detectIdColumnType(boardId) {
     return column.id;
 }
 
-async function assignPulseId(pulseId, boardId, columnId) {
+async function assignPulseId(pulseId, boardId, columnId) {   
     var db = admin.database();
     var ref = db.ref(defaultPrefix.toLowerCase() + "_id");
 
