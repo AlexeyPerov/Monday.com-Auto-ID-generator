@@ -1,4 +1,4 @@
-# serverless-monday
+# Auto-ID Generator WebHook for monday.com
 
 This tool can be used as a WebHook for Monday.com to assign Auto Incremented IDs to pulses.
 Uses Node.js and designed to be deployed on AWS Lambda.
