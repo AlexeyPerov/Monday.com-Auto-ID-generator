@@ -35,9 +35,6 @@ functions:
       - http: 
           path: /get_id_counter
           method: get 
-      - http: 
-          path: /test
-          method: get 
 
 plugins:
   - serverless-offline

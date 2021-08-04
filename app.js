@@ -181,10 +181,6 @@ app.get("/get_id_counter", async (req, res) => {
     res.status(200).send(result);
 });
 
-app.get("/test", (req, res) => {   
-    res.status(200).send();
-});
-
 async function fetchMondayQuery(query) {
     let response = await fetch("https://api.monday.com/v2", {
         method: 'post',
